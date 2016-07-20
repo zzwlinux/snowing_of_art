@@ -180,9 +180,13 @@ private:
     void keyPressEvent( QKeyEvent *e );
 
 private:
-    ImageWidget       m_image;
-    QPushButton       m_open,m_start,m_animotion;
-    cv::Mat           pic1,iron;
+    ImageWidget             m_image;
+    QPushButton             m_open,m_start,m_animotion;
+
+    QByteArray              ba;
+    cv::Mat                 pic1;
+    std::vector<cv::Mat>    iron;
+
     std::vector<size_t>     snow_x;
     std::vector<size_t>     snow_y;
     QTimer                  *timer;

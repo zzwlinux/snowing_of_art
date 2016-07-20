@@ -3,7 +3,9 @@
 #include <QDebug>
 #include <QKeyEvent>
 #include <unistd.h>
+#include <QTime>
 
+#include <sys/time.h>
 #include "mainwidget.h"
 
 MainWidget::MainWidget(QWidget *parent) :
@@ -32,7 +34,7 @@ MainWidget::MainWidget(QWidget *parent) :
 
     this->setLayout(mainLayout);
 
-    QString SnowName = "/home/zhenweizhang/my_progs/qt_cv/data/bg.bmp";
+    QString SnowName = "data/bg.bmp";
     OpenFile(SnowName,pic1);
     m_image.setPicture(std::shared_ptr<cv::Mat>(&pic1));
 
@@ -56,21 +58,23 @@ void MainWidget::OpenFile1()
 
 void MainWidget::StartSnow()
 {
-    QString SnowName = "/home/zhenweizhang/my_progs/qt_cv/data/snow.bmp";
-    QByteArray ba = SnowName.toLocal8Bit();
-    iron = cv::imread(ba.data());
-    cv::resize(iron, iron, cv::Size(iron.cols*0.5, iron.rows*0.5));
+    QString SnowName = "data/snow.bmp";
+    ba = SnowName.toLocal8Bit();
 
-    snow_x.clear(); snow_y.clear();
+    snow_x.clear(); snow_y.clear(),iron.clear();
     srand((unsigned)time(0));
     int count = rand()%6 + 4;
     for (int var = 0; var < count; ++var) {
+        cv::Mat temp = cv::imread(ba.data());
+        cv::resize(temp, temp, cv::Size(temp.cols*0.3, temp.rows*0.3));
+        iron.push_back(temp);
+
         size_t tmp_x = 62*(rand()%15);
         size_t tmp_y = 24*(rand()%10);
         snow_x.push_back(tmp_x);
         snow_y.push_back(tmp_y);
-        cv::Mat imageROI = pic1(cv::Rect(tmp_x,tmp_y,iron.cols,iron.rows));
-        cv::addWeighted(imageROI, 1.0, iron, 0.8, 0.1, imageROI);
+        cv::Mat imageROI = pic1(cv::Rect(tmp_x,tmp_y,temp.cols,temp.rows));
+        cv::addWeighted(imageROI, 1.0, temp, 0.8, 0.1, imageROI);
     }
 
     update();
@@ -80,41 +84,74 @@ void MainWidget::StartSnow()
 
 void MainWidget::SnowDown()
 {
-    QString SnowName = "/home/zhenweizhang/my_progs/qt_cv/data/bg.bmp";
+    QString SnowName = "data/bg.bmp";
     OpenFile(SnowName,pic1);
 
     int snowCount = snow_x.size();
     if(snowCount < 4)
     {
         srand((unsigned)time(0));
-        int count = rand()%5;
+        int count = rand()%6;
         for (int var = 0; var < count; ++var) {
             size_t tmp_x = 62*(rand()%15);
             size_t tmp_y = 24*(rand()%10);
+
+            float m_size = 0.1*(float)(rand()%5)+0.1;
+            cv::Mat temp = cv::imread(ba.data());
+            cv::resize(temp, temp, cv::Size(temp.cols*m_size, temp.rows*m_size));
+
+            iron.push_back(temp);
             snow_x.push_back(tmp_x);
             snow_y.push_back(tmp_y);
         }
-
     }
-    std::vector<size_t>::iterator iter_x = snow_x.begin();
-    std::vector<size_t>::iterator iter_y = snow_y.begin();
-    for (; iter_x != snow_x.end() ; ++iter_x,++iter_y) {
-        srand((unsigned)time(0));
-        int speed = (rand()%8)+8;
-        *iter_y +=speed;
-        if(*iter_y+iron.rows > pic1.rows){
-            snow_x.erase(iter_x);
-            snow_y.erase(iter_y);
-            break;
+
+    std::vector<size_t>::iterator  iter_x = snow_x.begin();
+    std::vector<size_t>::iterator  iter_y = snow_y.begin();
+    std::vector<cv::Mat>::iterator iter_iron = iron.begin();
+
+    for (; iter_x != snow_x.end() ; ++iter_iron,++iter_x,++iter_y) {
+        struct timeval start;
+        gettimeofday(&start,0);
+
+        qsrand(uint(start.tv_usec));
+        int speed = (qrand()%8)+8;
+        *iter_y += speed;
+        speed = (qrand()%8)-4;
+        *iter_x += speed;
+    }
+
+    bool checkDone = false;
+    while (!checkDone) {
+        for (iter_iron =iron.begin(),iter_x = snow_x.begin(),iter_y = snow_y.begin();
+             iter_x != snow_x.end() ; ++iter_iron,++iter_x,++iter_y) {
+
+            if(*iter_y+ iter_iron->rows > pic1.rows || *iter_x+ iter_iron->cols > pic1.cols){
+                snow_x.erase(iter_x);
+                snow_y.erase(iter_y);
+                iron.erase(iter_iron);
+                break;
+            }
         }
+        if(iter_iron == iron.end()) checkDone = true;
     }
 
-    for (iter_x = snow_x.begin(),iter_y = snow_y.begin(); iter_x != snow_x.end() ; ++iter_x,++iter_y) {
-        cv::Mat imageROI = pic1(cv::Rect(*iter_x,*iter_y,iron.cols,iron.rows));
-        cv::addWeighted(imageROI, 1.0, iron, 0.8, 0.1, imageROI);
+
+    for (iter_iron = iron.begin(),iter_x = snow_x.begin(),iter_y = snow_y.begin();
+         iter_iron != iron.end(),iter_x != snow_x.end(), iter_y != snow_y.end();
+         iter_x++,iter_y++,iter_iron++) {
+
+        if((*iter_x < 0)||(*iter_x) > pic1.cols) {
+//            std::cout<<"error!\n";
+            continue;
+        }
+//        std::cout<<"*iter_x = "<<*iter_x<<", *iter_y = "<<*iter_y<<", iter_iron->cols = "<<iter_iron->cols
+//                <<", iter_iron->rows = "<<iter_iron->rows<<"\n";
+//        std::cout.flush();
+        cv::Mat imageROI = pic1(cv::Rect(*iter_x,*iter_y,iter_iron->cols,iter_iron->rows));
+        cv::addWeighted(imageROI, 1.0, *iter_iron, 0.8, 0.1, imageROI);
     }
     update();
-
 }
 
 void MainWidget::timerUpDate()
@@ -141,7 +178,7 @@ void MainWidget::keyPressEvent(QKeyEvent *e)
         close();
         break;
 
-   default:
+    default:
         break;
     }
 }
